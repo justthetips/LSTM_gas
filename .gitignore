@@ -154,3 +154,5 @@ crashlytics-build.properties
 fabric.properties
 
 .idea/
+/models/duration.h5
+models/
