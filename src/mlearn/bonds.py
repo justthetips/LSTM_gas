@@ -1,82 +1,21 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-from scipy.optimize import brentq
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Activation
-from keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error
-from typing import Tuple, Any, List
+import os
 from math import sqrt
 from pathlib import Path
+from typing import Tuple, Any, List
 
-import os
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from keras.layers import Activation
+from keras.layers import Dense
+from keras.models import Sequential
+from keras.models import load_model
+from scipy.optimize import brentq
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.externals import joblib
 
-
-def name_chart(chart_type: str) -> str:
-    base_path = Path(__file__)
-    chrt_path = base_path.parent.parent.parent.joinpath('charts')
-    if not chrt_path.exists():
-        chrt_path.mkdir()
-    file_name = '-'.join([chart_type, '-chart.png'])
-    file_path = os.path.join(chrt_path, file_name)
-    return file_path
-
-
-def name_model(model_name: str) -> str:
-    base_path = Path(__file__)
-    chrt_path = base_path.parent.parent.parent.joinpath('models')
-    if not chrt_path.exists():
-        chrt_path.mkdir()
-    file_name = '.'.join([model_name, 'h5'])
-    file_path = os.path.join(chrt_path, file_name)
-    return file_path
-
-
-# convert series to supervised learning
-def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
-    n_vars = 1 if type(data) is list else data.shape[1]
-    df = pd.DataFrame(data)
-    cols, names = list(), list()
-    # input sequence (t-n, ... t-1)
-    for i in range(n_in, 0, -1):
-        cols.append(df.shift(i))
-        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
-    # forecast sequence (t, t+1, ... t+n)
-    for i in range(0, n_out):
-        cols.append(df.shift(-i))
-        if i == 0:
-            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
-        else:
-            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
-    # put it all together
-    agg = pd.concat(cols, axis=1)
-    agg.columns = names
-    # drop rows with NaN values
-    if dropnan:
-        agg.dropna(inplace=True)
-    return agg
-
-
-def price(yld: float, maturity: int, cpn: float, cpn_per_year: int = 2, maturity_value: int = 100) -> float:
-    payments: int = maturity * cpn_per_year
-    n: List[float] = [(1 / cpn_per_year) * x for x in range(1, payments + 1)]
-    cf: List[float] = [(cpn / cpn_per_year) * maturity_value for x in n]
-    cf[-1] += maturity_value
-    dcf: List[float] = [cf[i] / ((1 + yld) ** x) for i, x in enumerate(n)]
-    return sum(dcf)
-
-
-def price_dist(yld: float, maturity: int, cpn: float, target_price: float, cpn_per_year: int = 2,
-               maturity_value: int = 100) -> float:
-    return target_price - price(yld, maturity, cpn, cpn_per_year, maturity_value)
-
-
-def ytm(price: float, maturity: int, cpn: float, cpn_per_year: int = 2, maturity_value: int = 100) -> Tuple[float, Any]:
-    return brentq(price_dist, a=-cpn, b=2 * cpn, args=(maturity, cpn, price))
+from src.mlearn.utils import price, name_model, name_chart
 
 
 def generate_bond_row():
@@ -94,8 +33,9 @@ def generate_bond_inputs(n: int) -> pd.DataFrame:
     rows = []
     while len(rows) < n:
         rows.append(generate_bond_row())
-    df = pd.DataFrame.from_records(data=rows,columns=['Coupon','Yield','Maturity','Price'])
+    df = pd.DataFrame.from_records(data=rows, columns=['Coupon', 'Yield', 'Maturity', 'Price'])
     return df
+
 
 np.random.seed(7)
 
@@ -108,6 +48,8 @@ values = dataset.values
 # create our imputs
 scaler = MinMaxScaler(feature_range=(0, 1))
 scaled = scaler.fit_transform(values)
+# save our scaler
+joblib.dump(scaler, name_model('scaler', 'save'))
 
 train_size = int(0.75 * num_bonds)
 train = scaled[:train_size, :]
@@ -121,19 +63,18 @@ test_X = test_X.reshape((test_X.shape[0], test_X.shape[1]))
 print(train_X.shape, train_y.shape, test_X.shape, test_y.shape)
 
 # create the model
-model = Sequential()
-model.add(Dense(768, input_dim=3, activation="relu"))
-model.add(Dense(384, activation="relu"))
-model.add(Dense(1))
-model.add(Activation("sigmoid"))
+#model = Sequential()
+#model.add(Dense(768, input_dim=3, activation="relu"))
+#model.add(Dense(384, activation="relu"))
+#model.add(Dense(1))
+#model.add(Activation("sigmoid"))
 # Compile model
-model.compile(loss='mse', optimizer='adam')
+#model.compile(loss='mse', optimizer='adam')
 # Fit the model
-model.fit(train_X, train_y, epochs=300, batch_size=5000, validation_data=(test_X, test_y), verbose=2,
-          shuffle=False)
-model.save(filepath=name_model('duration'))
+#model.fit(train_X, train_y, epochs=1000, batch_size=7500, validation_data=(test_X, test_y), verbose=2, shuffle=False)
+#model.save(filepath=name_model('duration'))
 
-# model = load_model(filepath=name_model('duration'))
+model = load_model(filepath=name_model('duration'))
 
 
 # make a prediction
@@ -155,7 +96,9 @@ print('Test RMSE: %.3f' % rmse)
 plt.plot(inv_yhat, inv_y, '.')
 plt.xlabel('predicted')
 plt.ylabel('actual')
+plt.title('Predicted vs Actual Bond Prices')
 m, b = np.polyfit(inv_yhat, inv_y, 1)
 plt.plot(inv_yhat, m * inv_yhat + b, '-')
+plt.savefig(name_chart('bond_pricing'))
 plt.show()
 plt.close()
