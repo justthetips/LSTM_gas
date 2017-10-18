@@ -18,11 +18,11 @@ def name_chart(chart_type: str) -> str:
 
 def name_model(model_name: str, extension: str = 'h5') -> str:
     base_path = Path(__file__)
-    chrt_path = base_path.parent.parent.parent.joinpath('models')
-    if not chrt_path.exists():
-        chrt_path.mkdir()
+    model_path = base_path.parent.parent.parent.joinpath('models')
+    if not model_path.exists():
+        model_path.mkdir()
     file_name = '.'.join([model_name, extension])
-    file_path = os.path.join(chrt_path, file_name)
+    file_path = os.path.join(model_path, file_name)
     return file_path
 
 
